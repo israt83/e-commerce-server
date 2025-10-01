@@ -50,7 +50,7 @@ async function run() {
 
     // middlewares
     const verifyToken = (req, res, next) => {
-      console.log("inside verifyToken", req.headers.authorization);
+      // console.log("inside verifyToken", req.headers.authorization);
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "unauthorized access" });
       }
@@ -139,6 +139,35 @@ async function run() {
       res.send(result);
     });
 
+    // search products 
+// app.get("/products", async (req, res) => {
+//   const search = req.query.query || ""; 
+//   const query = {
+//     name: { $regex: search, $options: "i" }
+//   };
+
+//   const products = await productCollection.find(query).toArray();
+//   res.json(products);
+// });
+
+app.get("/products", async (req, res) => {
+  const search = req.query.query || "";
+
+  const query = {
+    $or: [
+      { name: { $regex: search, $options: "i" } },      // product name match
+      { category: { $regex: search, $options: "i" } }   // category match
+    ]
+  };
+
+  try {
+    const products = await productCollection.find(query).toArray();
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
     app.get("/product/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -183,14 +212,14 @@ async function run() {
       res.send(result);
     });
 
-    // ✅ Add a Review
+    //  Add a Review
     app.post("/reviews", async (req, res) => {
       const review = req.body;
       const result = await reviewsCollection.insertOne(review);
       res.send(result);
     });
 
-    // ✅ Get Reviews by ProductId
+    //  Get Reviews by ProductId
     app.get("/reviews/:productId", async (req, res) => {
       const productId = req.params.productId;
       const reviews = await reviewsCollection
@@ -200,27 +229,24 @@ async function run() {
       res.send(reviews);
     });
     // Update review
-    app.put("/:id", async (req, res) => {
+    app.put("/reviews/:id", async (req, res) => {
       const id = req.params.id;
       const updatedReview = req.body;
-      const result = await req.app.locals.db
-        .collection("reviews")
-        .updateOne(
-          { _id: new ObjectId(id) },
-          { $set: { review: updatedReview.review, date: new Date() } }
-        );
+      const result = await reviewsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { review: updatedReview.review, date: new Date() } }
+      );
       res.send(result);
     });
 
     // Delete review
-    app.delete("/:id", async (req, res) => {
+    app.delete("/reviews/:id", async (req, res) => {
       const id = req.params.id;
-      const result = await req.app.locals.db
-        .collection("reviews")
-        .deleteOne({ _id: new ObjectId(id) });
+      const result = await reviewsCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
       res.send(result);
     });
-
     // carts collection
     app.get("/carts", async (req, res) => {
       const email = req.query.email;

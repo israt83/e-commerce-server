@@ -140,15 +140,7 @@ async function run() {
     });
 
     // search products 
-// app.get("/products", async (req, res) => {
-//   const search = req.query.query || ""; 
-//   const query = {
-//     name: { $regex: search, $options: "i" }
-//   };
 
-//   const products = await productCollection.find(query).toArray();
-//   res.json(products);
-// });
 
 app.get("/products", async (req, res) => {
   const search = req.query.query || "";
@@ -291,17 +283,7 @@ app.get("/products", async (req, res) => {
       res.send(result);
     });
 
-    // app.post('/payments' , async(req ,res ) =>{
-    //   const payment = req.body;
-    //   const paymentResult = await paymentsCollection.insertOne(payment);
-    //   console.log('paymentInfo' ,payment);
-    //   const query = {_id: {
-    //     $in: payment.cartIds.map(id => new ObjectId(id))
-    //   }};
-
-    //   const deleteResult = await cartCollection.deleteMany(query);
-    //   res.send({paymentResult , deleteResult});
-    // })
+    // payments
     app.post("/payments", async (req, res) => {
       const payment = req.body;
 
@@ -357,43 +339,101 @@ app.get("/products", async (req, res) => {
       });
     });
 
-    // using aggregate pipeline
+  
 
-    app.get("/order-stats", async (req, res) => {
-      const result = await paymentsCollection
-        .aggregate([
-          {
-            $unwind: "$productItemIds",
-          },
-          {
-            $lookup: {
-              from: "product",
-              localField: "productItemIds",
-              foreignField: "_id",
-              as: "productItems",
+app.get("/order-stats", async (req, res) => {
+  try {
+    const result = await paymentsCollection.aggregate([
+      { $unwind: "$productItemIds" },
+      {
+        $addFields: {
+          productItemIds: { $toObjectId: "$productItemIds" },
+        },
+      },
+      {
+        $lookup: {
+          from: "product", 
+          localField: "productItemIds",
+          foreignField: "_id",
+          as: "productItems",
+        },
+      },
+      { $unwind: "$productItems" },
+      {
+        $group: {
+          _id: "$productItems.category",
+          quantity: { $sum: 1 },
+          revenue: {
+            $sum: {
+              $convert: {
+                input: "$productItems.price",
+                to: "double",
+                onError: 0,
+                onNull: 0,
+              },
             },
           },
-          {
-            $unwind: "$productItems",
-          },
-          {
-            $group: {
-              _id: "$productItems.category",
-              quantity: { $sum: 1 },
-              revenue: { $sum: "$productItems.price" },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              category: "$_id",
-              quantity: "$quantity",
-              revenue: "$revenue",
-            },
-          },
-        ])
-        .toArray();
-    });
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          category: "$_id",
+          quantity: 1,
+          revenue: 1,
+        },
+      },
+    ]).toArray();
+
+   
+
+    res.send(result);
+  } catch (error) {
+    console.error("order-stats error:", error);
+    res.status(500).send({ message: "Failed to fetch order stats", error });
+  }
+});
+// Get all bookings
+app.get("/manage-bookings", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const bookings = await paymentsCollection
+      .find({})
+      .sort({ date: -1 }) // latest first
+      .toArray();
+    res.send(bookings);
+  } catch (error) {
+    console.error("Error fetching bookings:", error);
+    res.status(500).send({ message: "Failed to fetch bookings" });
+  }
+});
+
+// Update booking status
+app.patch("/manage-bookings/:id", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { status } = req.body; // pending, confirmed, completed, canceled
+    const result = await paymentsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status } }
+    );
+    res.send({ success: !!result.modifiedCount, status });
+  } catch (error) {
+    console.error("Error updating booking status:", error);
+    res.status(500).send({ message: "Failed to update booking status" });
+  }
+});
+
+// Delete booking
+app.delete("/manage-bookings/:id", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = await paymentsCollection.deleteOne({ _id: new ObjectId(id) });
+    res.send({ success: !!result.deletedCount });
+  } catch (error) {
+    console.error("Error deleting booking:", error);
+    res.status(500).send({ message: "Failed to delete booking" });
+  }
+});
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });

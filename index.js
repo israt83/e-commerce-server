@@ -8,10 +8,10 @@ const port = process.env.PORT || 5001;
 
 const corsOptions = {
   origin: ["https://luxebeautys.netlify.app","http://localhost:5173" ],
-    methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+  
 
   credentials: true,
-  optionSuccessStatus: 200,
+  optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
 

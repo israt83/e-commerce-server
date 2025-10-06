@@ -7,7 +7,8 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5001;
 
 const corsOptions = {
-  origin: ["http://localhost:5173" , "https://luxebeautys.netlify.app"],
+  origin: ["https://luxebeautys.netlify.app","http://localhost:5173" ],
+    methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
 
   credentials: true,
   optionSuccessStatus: 200,

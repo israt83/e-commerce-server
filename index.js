@@ -14,6 +14,8 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+
+
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nghfy93.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -76,6 +78,7 @@ async function run() {
       next();
     };
 
+  
     // user related api
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
@@ -139,26 +142,25 @@ async function run() {
       res.send(result);
     });
 
-    // search products 
+    // search products
 
+    app.get("/products", async (req, res) => {
+      const search = req.query.query || "";
 
-app.get("/products", async (req, res) => {
-  const search = req.query.query || "";
+      const query = {
+        $or: [
+          { name: { $regex: search, $options: "i" } }, // product name match
+          { category: { $regex: search, $options: "i" } }, // category match
+        ],
+      };
 
-  const query = {
-    $or: [
-      { name: { $regex: search, $options: "i" } },      // product name match
-      { category: { $regex: search, $options: "i" } }   // category match
-    ]
-  };
-
-  try {
-    const products = await productCollection.find(query).toArray();
-    res.json(products);
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
+      try {
+        const products = await productCollection.find(query).toArray();
+        res.json(products);
+      } catch (err) {
+        res.status(500).json({ message: "Server error" });
+      }
+    });
 
     app.get("/product/:id", async (req, res) => {
       const id = req.params.id;
@@ -339,101 +341,111 @@ app.get("/products", async (req, res) => {
       });
     });
 
-  
-
-app.get("/order-stats", async (req, res) => {
-  try {
-    const result = await paymentsCollection.aggregate([
-      { $unwind: "$productItemIds" },
-      {
-        $addFields: {
-          productItemIds: { $toObjectId: "$productItemIds" },
-        },
-      },
-      {
-        $lookup: {
-          from: "product", 
-          localField: "productItemIds",
-          foreignField: "_id",
-          as: "productItems",
-        },
-      },
-      { $unwind: "$productItems" },
-      {
-        $group: {
-          _id: "$productItems.category",
-          quantity: { $sum: 1 },
-          revenue: {
-            $sum: {
-              $convert: {
-                input: "$productItems.price",
-                to: "double",
-                onError: 0,
-                onNull: 0,
+    app.get("/order-stats", async (req, res) => {
+      try {
+        const result = await paymentsCollection
+          .aggregate([
+            { $unwind: "$productItemIds" },
+            {
+              $addFields: {
+                productItemIds: { $toObjectId: "$productItemIds" },
               },
             },
-          },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          category: "$_id",
-          quantity: 1,
-          revenue: 1,
-        },
-      },
-    ]).toArray();
+            {
+              $lookup: {
+                from: "product",
+                localField: "productItemIds",
+                foreignField: "_id",
+                as: "productItems",
+              },
+            },
+            { $unwind: "$productItems" },
+            {
+              $group: {
+                _id: "$productItems.category",
+                quantity: { $sum: 1 },
+                revenue: {
+                  $sum: {
+                    $convert: {
+                      input: "$productItems.price",
+                      to: "double",
+                      onError: 0,
+                      onNull: 0,
+                    },
+                  },
+                },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                category: "$_id",
+                quantity: 1,
+                revenue: 1,
+              },
+            },
+          ])
+          .toArray();
 
-   
+        res.send(result);
+      } catch (error) {
+        console.error("order-stats error:", error);
+        res.status(500).send({ message: "Failed to fetch order stats", error });
+      }
+    });
+    // Get all bookings
+    app.get("/manage-bookings", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const bookings = await paymentsCollection
+          .find({})
+          .sort({ date: -1 }) // latest first
+          .toArray();
+        res.send(bookings);
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+        res.status(500).send({ message: "Failed to fetch bookings" });
+      }
+    });
 
-    res.send(result);
-  } catch (error) {
-    console.error("order-stats error:", error);
-    res.status(500).send({ message: "Failed to fetch order stats", error });
-  }
-});
-// Get all bookings
-app.get("/manage-bookings", verifyToken, verifyAdmin, async (req, res) => {
-  try {
-    const bookings = await paymentsCollection
-      .find({})
-      .sort({ date: -1 }) // latest first
-      .toArray();
-    res.send(bookings);
-  } catch (error) {
-    console.error("Error fetching bookings:", error);
-    res.status(500).send({ message: "Failed to fetch bookings" });
-  }
-});
-
-// Update booking status
-app.patch("/manage-bookings/:id", verifyToken, verifyAdmin, async (req, res) => {
-  try {
-    const id = req.params.id;
-    const { status } = req.body; // pending, confirmed, completed, canceled
-    const result = await paymentsCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status } }
+    // Update booking status
+    app.patch(
+      "/manage-bookings/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const id = req.params.id;
+          const { status } = req.body; // pending, confirmed, completed, canceled
+          const result = await paymentsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: { status } }
+          );
+          res.send({ success: !!result.modifiedCount, status });
+        } catch (error) {
+          console.error("Error updating booking status:", error);
+          res.status(500).send({ message: "Failed to update booking status" });
+        }
+      }
     );
-    res.send({ success: !!result.modifiedCount, status });
-  } catch (error) {
-    console.error("Error updating booking status:", error);
-    res.status(500).send({ message: "Failed to update booking status" });
-  }
-});
 
-// Delete booking
-app.delete("/manage-bookings/:id", verifyToken, verifyAdmin, async (req, res) => {
-  try {
-    const id = req.params.id;
-    const result = await paymentsCollection.deleteOne({ _id: new ObjectId(id) });
-    res.send({ success: !!result.deletedCount });
-  } catch (error) {
-    console.error("Error deleting booking:", error);
-    res.status(500).send({ message: "Failed to delete booking" });
-  }
-});
+    // Delete booking
+    app.delete(
+      "/manage-bookings/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const id = req.params.id;
+          const result = await paymentsCollection.deleteOne({
+            _id: new ObjectId(id),
+          });
+          res.send({ success: !!result.deletedCount });
+        } catch (error) {
+          console.error("Error deleting booking:", error);
+          res.status(500).send({ message: "Failed to delete booking" });
+        }
+      }
+    );
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });

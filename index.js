@@ -42,14 +42,6 @@ async function run() {
       .db("onlineCosmetic")
       .collection("payments");
 
-    // jwt api
-    app.post("/jwt", async (req, res) => {
-      const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "365d",
-      });
-      res.send({ token });
-    });
 
     // middlewares
     const verifyToken = (req, res, next) => {
@@ -79,6 +71,14 @@ async function run() {
       next();
     };
 
+    // jwt api
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "365d",
+      });
+      res.send({ token });
+    });
   
     // user related api
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {

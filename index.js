@@ -7,15 +7,14 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5001;
 
 const corsOptions = {
-  origin: ["https://luxebeautys.netlify.app","http://localhost:5174" ],
-  
+  origin: ["https://luxebeautys.netlify.app", "http://localhost:5173"],
 
   credentials: true,
-  optionsSuccessStatus: 200,
+  optionSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
 
-
+app.use(express.json());
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nghfy93.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -32,7 +31,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const userCollection = client.db("onlineCosmetic").collection("users");
     const productCollection = client.db("onlineCosmetic").collection("product");
@@ -41,7 +40,6 @@ async function run() {
     const paymentsCollection = client
       .db("onlineCosmetic")
       .collection("payments");
-
 
     // middlewares
     const verifyToken = (req, res, next) => {
@@ -79,7 +77,7 @@ async function run() {
       });
       res.send({ token });
     });
-  
+
     // user related api
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
@@ -449,20 +447,17 @@ async function run() {
     );
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // ***
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
   }
 }
 run().catch(console.dir);
-
-// middleware
-app.use(cors());
-app.use(express.json());
 
 app.get("/", (req, res) => {
   res.send("online cosmeting shop running");
